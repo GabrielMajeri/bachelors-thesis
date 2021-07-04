@@ -1,0 +1,66 @@
+\chapter{Elemente de sintaxă ale limbajului Rust}
+
+Această anexă conține o scurtă introducere în Rust, suficientă să-i permită cititorului cu experiență anterioară în alte limbaje să înțeleagă codul din profilator.
+
+Rust este un limbaj de \textit{systems programming} dezvoltat inițial de Graydon Hoare în cadrul Mozilla Research. Scopul lui era să proiecteze un limbaj care să ofere siguranță (din punct de vedere al accesului de memorie) și să ajute dezvoltatorul să fie productiv, fără să compromită performanța.
+
+\section*{Noțiuni de bază}
+
+Figura \ref{fig:rust_hello_world} exemplifică un program simplu de tip \textit{hello world} scris în Rust. Se definește funcția de intrare \texttt{main}, care utilizează un \textit{macro} numit \texttt{println!} pentru a trimite un șir de caractere la ieșirea standard.
+
+\begin{figure}[h]
+    \centering
+    \begin{lstlisting}[language=Rust]
+    fn main() {
+        println!("Salut, lume!");
+    }
+    \end{lstlisting}
+    \caption{Un program simplu în Rust}
+    \label{fig:rust_hello_world}
+\end{figure}
+
+La fel ca limbajele imperative, Rust oferă suport pentru variabile, funcții și module. Inspirându-se din principiile programării funcționale, toate variabilele sunt \textit{implicit imuabile}. Acest lucru este prezentat în figura \ref{fig:rust_variables}.
+
+\begin{figure}[ht]
+    \centering
+    \begin{lstlisting}[language=Rust]
+    fn main() {
+        let a = 3;
+        let mut b = 5;
+        // a = 4; // eroare de compilare, `a` nu este mutabil
+        b = 7;
+        
+        println!("{} {}", a, b); // afiseaza "3 7"
+    }
+    \end{lstlisting}
+    \caption{Declarări de variabile în Rust}
+    \label{fig:rust_variables}
+\end{figure}
+
+\section*{Structuri și \textit{traits}}
+
+De asemenea, se pot defini structuri folosind cuvântul cheie \texttt{struct}, la fel ca în C/C++. Acestea pot avea câmpuri cu diferite nivele de vizibilitate. Pentru a defini metode (funcții membru), se poate folosi un bloc de tip \texttt{impl}, ca în exemplul \ref{fig:rust_structs}.
+
+\begin{figure}[ht]
+    \centering
+    \begin{lstlisting}[language=Rust]
+    struct Exemplu {
+        field1: i32,
+        field2: String,
+    }
+    
+    impl Exemplu {
+        fn get_string(&self) -> String {
+            self.field2
+        }
+        
+        fn actualizeaza(&mut self) {
+            self.field1 += 1;
+        }
+    }
+    \end{lstlisting}
+    \caption{Structuri și metode membru}
+    \label{fig:rust_structs}
+\end{figure}
+
+Rust oferă abstractizare printr-un sistem bazat pe \emph{traits}; acestea sunt un hibrid între \textit{typeclasses} din Haskell și \textit{interfețele} din limbajele orientate pe obiect \cite{traits_paper}. Ele pot declara metode abstracte pe care tipurile de date care le implementează trebuie să le definească, dar pot avea și \textit{tipuri asociate}.

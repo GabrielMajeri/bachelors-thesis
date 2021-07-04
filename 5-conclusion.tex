@@ -1,0 +1,21 @@
+\chapter{Concluzii}
+
+Unealta descrisă în capitolele precedente nu utilizează algoritmi complecși, ci se bazează pe câteva observații subtile și optimizări bine-alese. Codul final este scurt, dar suficient de abstractizat pentru a permite măsurarea altor indicatori ai performanței.
+
+\section*{Dezvoltări ulterioare}
+
+\subsection*{Funcții recursive}
+
+Algoritmul descris anterior omite un caz special de subprograme: cele care se apelează \textbf{recursiv} (direct sau indirect). Deși nu le-am întâlnit în programele testate, acestea sunt utile în algoritmi de tip \textit{divide et impera} sau când se lucrează cu structuri de date recursive cum ar fi arbori.
+
+Problema care apare la funcțiile recursive este că timpul total nu mai este un indicator atât de relevant pentru performanță. În schimb, ar trebui contorizat numărul de apeluri recursive și adâncimea maximă a stivei de apel. Codul care calculează timpul cumulativ de execuție și algoritmul de selecție a funcțiilor rămâne neschimbat.
+
+\subsection*{Optimizări interne}
+
+Chiar și fără algoritmul de curse, profilatorul dezvoltat în cadrul acestei lucrări are un cost de analiză \textbf{mai mic} decât \texttt{cProfile}, profilatorul inclus în biblioteca standard Python\footnote{Testele sugerează un \textit{overhead} relativ redus cu 1-5\%.}. Acest lucru se datorează în mare parte utilizării limbajului Rust, care permite compilatorului să facă unele presupuneri și optimizări care nu ar fi sigure într-un cod echivalent de C (limbajul în care este scris modulul \texttt{cProfile}).
+
+În același timp, măsurătorile efectuate de mine sugerează că încă se mai pot obține îmbunătățiri la nivelul implementării. Mai exact, o meta-analiză a profilatorului folosind unealta \texttt{perf} din Linux indică ineficiențe în codul de hashing (folosit la string interning) și în implementarea arborelui splay.
+
+\subsection*{Experiența utilizatorului final}
+
+Calitatea unui produs software se măsoară în cât de plăcută este \textbf{experiența dezvoltatorului care o utilizează}. Îmi doresc să îmbunătățesc interfața din linia de comandă și să documentez modul de funcționare al profilatorului. Eventual, ar putea fi publicat și pe PyPI\footnote{\href{https://pypi.org/}{Python Package Index (pypi.org)}} pentru a permite instalarea rapidă de pe orice sistem de operare.

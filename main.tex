@@ -1,0 +1,141 @@
+\documentclass{report}[12pt, a4paper]
+
+% Suport pentru diacritice și alte simboluri
+\usepackage{fontspec}
+
+% Suport pentru mai multe limbi
+\usepackage{polyglossia}
+
+% Setează limba textului la română
+\setdefaultlanguage{romanian}
+% Am nevoie de engleză pentru rezumat
+\setotherlanguages{english}
+
+% Indentează și primul paragraf al fiecărei noi secțiuni
+\SetLanguageKeys{romanian}{indentfirst=true}
+
+% Suport pentru diferite stiluri de ghilimele
+\usepackage{csquotes}
+
+\DeclareQuoteStyle{romanian}
+  {\quotedblbase}
+  {\textquotedblright}
+  {\guillemotleft}
+  {\guillemotright}
+
+% Utilizează biblatex pentru referințe bibliografice
+\usepackage[
+    maxbibnames=50,
+    sorting=nty
+]{biblatex}
+
+\addbibresource{bibliography.bib}
+
+% Setează spațiere inter-linie la 1.5
+\usepackage{setspace}
+\onehalfspacing
+
+% Modificarea geometriei paginii
+\usepackage{geometry}
+
+% Include funcțiile de grafică
+\usepackage{graphicx}
+% Încarcă imaginile din directorul `images`
+\graphicspath{{./images/}}
+
+% Listări de cod
+\usepackage{listings, listings-rust}
+
+% Linkuri interactive în PDF
+\usepackage[
+    colorlinks,
+    linkcolor={black},
+    menucolor={black},
+    citecolor={black},
+    urlcolor={blue}
+]{hyperref}
+
+% Simboluri matematice codificate Unicode
+\usepackage{unicode-math}
+
+% Comenzi matematice
+\usepackage{amsmath}
+\usepackage{mathtools}
+
+% Formule matematice
+\newcommand{\bigO}[1]{\symcal{O}\left(#1\right)}
+\DeclarePairedDelimiter\abs{\lvert}{\rvert}
+
+% Suport pentru rezumat în două limbi
+% Bazat pe https://tex.stackexchange.com/a/70818
+\newenvironment{abstractpage}
+  {\cleardoublepage\vspace*{\fill}\thispagestyle{empty}}
+  {\vfill\cleardoublepage}
+\renewenvironment{abstract}[1]
+  {\bigskip\selectlanguage{#1}%
+   \begin{center}\bfseries\abstractname\end{center}}
+  {\par\bigskip}
+
+% Suport pentru anexe
+\usepackage{appendix}
+
+% Stiluri diferite de headere și footere
+\usepackage{fancyhdr}
+
+\fancypagestyle{front}{
+  \fancyhf{}
+  \renewcommand{\headrulewidth}{0pt}
+  \cfoot{}
+}
+\fancypagestyle{main}{
+  \fancyhf{}
+  \renewcommand\headrulewidth{0pt}
+  \fancyhead[C]{}
+  \fancyfoot[C]{\thepage}
+}
+
+% Metadate
+\title{Eficientizarea procesului de\\profilare a performanței}
+\author{Constantin-Gabriel Majeri}
+
+% Generează variabilele cu @
+\makeatletter
+
+\begin{document}
+
+% Front matter
+\cleardoublepage
+\pagestyle{front}
+\let\ps@plain\ps@front
+
+% Pagina de titlu
+\include{0-title}
+
+\restoregeometry
+
+\addtocounter{page}{1}
+
+% Rezumatul
+\include{0-abstract}
+
+\tableofcontents
+
+% Main matter
+\cleardoublepage
+\pagestyle{main}
+\let\ps@plain\ps@main
+
+\include{1-introduction}
+\include{2-preliminaries}
+\include{3-solution}
+\include{4-implementation}
+\include{5-conclusion}
+
+\begin{appendix}
+\include{6-python}
+\include{7-rust}
+\end{appendix}
+
+\printbibliography[heading=bibintoc]
+
+\end{document}

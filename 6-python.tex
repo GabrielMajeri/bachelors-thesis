@@ -1,0 +1,11 @@
+\chapter{Detalii de implementare pentru interpretorul CPython}
+
+\label{annex:python}
+
+Orice implementare de Python permite configurarea unui profilator scris în același limbaj prin funcția \texttt{setprofile} din modulul \texttt{sys}. Aceasta primește ca parametru o referință la o funcție definită tot în Python \footnote{Interfața ei este descrisă în \href{https://docs.python.org/3/library/sys.html\#sys.setprofile}{documentație}.}, care va fi apelată de interpretor la fiecare eveniment de tip apel/întoarcere dintr-o funcție, respectiv la aruncarea unei excepții.
+
+CPython, implementarea standard a limbajului, oferă o modalitate alternativă de a activa profilarea, prin \texttt{PyEval\_SetProfile}. În comparație cu \texttt{sys.setprofile}, aceasta necesită un pointer la o funcție implementată în cod nativ.
+
+\textit{Callback}-ul de profilare primește o referință către \textit{stack frame}-ul curent, o structură internă folosită de interpretor pentru a reține informații despre funcția care se execută. Biblioteca \texttt{PyO3} oferă definiții pentru tipurile de date respective, precum și un mod sigur de a extrage numele funcției ca șir de caractere.
+
+Algoritmul din \texttt{Profiler} înregistrează diferit evenimentele în funcție de tipul funcției: dacă este scrisă în Python (eveniment de tip \texttt{call}/\texttt{return}) putem măsura timpul de execuție total și cumulativ, dar dacă este una nativă (eveniment de tip \texttt{c\_call}/\texttt{c\_return}) nu putem măsura decât timpul cumulativ.

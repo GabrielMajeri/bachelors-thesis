@@ -1,0 +1,154 @@
+\chapter{Implementare}
+
+Acest capitol descrie detaliile de implementare care au crescut performanța produsului final. Pe lângă eficiența adusă de algoritmul inteligent de selectare a subprogramelor, descris în capitolul anterior, am descoperit că un rol important îl joacă și structurile de date utilizate, precum și modul în care se apelează funcțiile sistemului de operare (\emph{syscalls}).
+
+\section{Alegerea limbajului țintă}
+
+La fel ca alte unelte de dezvoltare (compilatoare, analizatoare statice, etc.), fiecare profilator oferă suport pentru o mulțime restrânsă de limbaje. Principialul factor de diferențiere este dacă limbajul este unul compilat sau interpretat.
+
+\subsection*{Interpretare vs. compilare}
+
+Într-un \textbf{limbaj compilat} ca C/C++, sunt necesare modificări la nivel de compilator. Acesta ar \emph{instrumenta} codul, introducând apeluri către codul de profilare la începutul și la sfârșitul fiecărei funcții \cite{instrumentation_framework}. Pentru limbajele din familia C, compilatorul Clang are o interfață pentru utilizarea acestei tehnici \cite{clang_instrumented_profiling}.
+
+În \textbf{limbajele interpretate}, suportul pentru profilare este inclus în interpretor. Acesta expune un API prin care o unealtă externă poate seta \textit{callback}-uri (pointeri la funcții) care vor fi apelați automat de interpretor când se întâmplă un eveniment de interes (de pildă, apelul unei funcții sau aruncarea unei excepții).
+
+Având în vedere flexibilitatea lor, de la început am decis să folosesc un limbaj interpretat ca țintă pentru profilator.
+
+\subsection*{Java}
+
+Prima opțiune investigată a fost \textbf{Java}. Proiectat de James Gosling în anii '90, acest limbaj orientat pe obiect se remarcă prin simplitate și prin popularitatea continuă de care a avut parte. Mașina virtuală Java expune o interfață de programare nativă numită JVM TI (\textit{Java Virtual Machine Tool Interface}) care îi permite programatorului să monitorizeze și să controleze starea internă a interpretorului și a programului care se execută.
+
+Motivele pentru care nu am continuat cu această platformă sunt:
+\begin{itemize}
+    \item \textbf{Complexitatea} API-ului de profilare, care expune foarte multe evenimente, cum ar fi accesarea câmpurilor sau încărcarea dinamică a claselor.
+    \item Existența unui \textbf{compilator just-in-time} (\textit{JIT})\footnote{Aș fi putut să-l dezactivez când efectuam testele, dar în practică programele de Java se bazează pe optimizările făcute de acesta.} în implementarea standard a mașinii virtuale (numită \textit{HotSpot}).
+\end{itemize}
+
+Totodată, aceste restricții au făcut ca în ecosistemul Java să existe destul de puține unelte de profilare/debugging, iar majoritatea sunt contra cost.
+
+\subsection*{Python}
+
+Am ales să țintesc programe scrise în \textbf{Python} pentru că este un limbaj foarte popular, cu care am și multă experiență anterioară. De asemenea, există mai multe profilatoare open source și comerciale pentru acesta, care au servit ca sursă de inspirație și au fost utile pentru comparații.
+
+Limbajul poate rula pe diferite mașini virtuale, cum ar fi \emph{IronPython} \cite{ironpython} (pentru .NET) sau \emph{PyPy} \cite{pypy} (o implementare de Python scrisă în Python). M-am bazat pe implementarea de referință \emph{CPython} \cite{cpython}, pentru că este cea mai veche și cea mai bine documentată. Detaliile tehnice ale acestei platforme se află în anexa \ref{annex:python}.
+
+\section{Alegerea limbajului de implementare}
+
+Python este suficient de flexibil cât să permită implementarea unui profilator direct în limbajul țintă. Cu scopul de a obține performanță maximă, am decis să implementez algoritmul de profilare în limbajul Rust.
+
+\emph{Rust} este un limbaj compilat multi-paradigmă, care a împrumutat multe idei din domeniul programării funcționale \cite{rust}. Rust țintește să fie performant, sigur, și să ajute dezvoltatorii să fie productivi. Studiile empirice au demonstrat în numărate rânduri că îndeplinește cu succes aceste obiective \cite{rust_performance}\cite{rust_memory_safety}.
+
+De asemenea, Rust are un ecosistem bogat de biblioteci open source\footnote{\href{https://crates.io/}{crates.io}}, ceea ce a redus timpul de dezvoltare.
+
+\subsection*{Interfațarea cu Python}
+
+Un concept moștenit din limbajul Lisp este \emph{procedural macros} \cite{lisp_macros}, o metodă prin care dezvoltatorii pot extinde limbajul, beneficiind de acces la arborele de sintaxă al compilatorului. Biblioteca \texttt{pyo3} utilizează acest feature pentru a genera automat puntea de legătură cu Python:
+
+\begin{lstlisting}[language=Rust]
+#[pyclass]
+struct Profiler;
+
+#[pymethods]
+impl Profiler {
+    fn metoda1(&self) {
+        println!("Aceasta metoda poate fi apelata din Python");
+    }
+}
+\end{lstlisting}
+
+În spate, \texttt{\#[pyclass]} și \texttt{\#[pymethods]} generează simbolurile binare de care are nevoie interpretorul CPython pentru a încărca dinamic modulul.
+
+\section{Arhitectura profilatorului}
+
+Unealta software este alcătuită din mai multe componente:
+
+\begin{itemize}
+    \item Un \textbf{modul de Python} implementat în Rust, \texttt{libadaptive\_profiler.so}, care exportă clasa \texttt{AdaptiveProfiler} prin Foreign Function Interface (FFI) a interpreterului CPython.
+    \item Un \textbf{script executabil} \texttt{adaprof.py} care importă modulul de mai sus expune o interfață din linia de comandă (\textit{CLI})
+    \item Un script \texttt{benchmark.py} împreună cu o \textbf{suită de aplicații de test}, pe care le-am folosit pentru a evalua caracteristicile profilatorului și a altor soluții existente.
+\end{itemize}
+
+Logica aplicației este distribuite în mai multe structuri și tipuri de date interne, surprinse în figura \ref{fig:class-diagram}.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{class-diagram}
+    \caption{Vedere de ansamblu a codului}
+    \label{fig:class-diagram}
+\end{figure}
+
+\textbf{Observație:} În diagramă și în paragrafele care urmează, \textit{interfețele} corespund de fapt unor \textit{traits} în codul de Rust.
+
+\medskip
+
+Interfața \textbf{Lifecycle} este implementată de obiectele a căror utilizare se potrivește cu ciclul de viață al profilatorului. De exemplu, contoarele sunt pornite și oprite odată cu activarea sau dezactivarea sistemului de profilare.
+
+Această abstracție este inspirată de platforma Android, unde componentele de interfață trebuie să respecte ciclul de viață al aplicației, pentru a evita erorile de tip \textit{use-after-free} și consumul inutil de resurse \cite{android_lifecycle}.
+
+Interfața \textbf{Counter} reprezintă un indicator de performanță pe care știm să-l măsurăm. Este definită prin două tipuri asociate, \texttt{ValueType} și \texttt{DifferenceType}, care reprezintă tipul de date al \textit{valorilor} pe care le întoarce contorul (de exemplu, \texttt{Instant} --- numărul de nanosecunde --- în cazul \texttt{TimeCounter}, sau \texttt{u64} --- numărul de evenimente de tipul indicat --- în cazul \texttt{HardwarePerformanceCounter}) și tipul de date al \textit{diferenței} între valori (\texttt{Duration}, respectiv tot \texttt{u64}).
+
+Funcția \texttt{read} citește valoarea contorului la momentul apelării. Este esențial să fie cât mai optimizată, pentru a reduce costul adițional de analiză.
+
+Interfața \texttt{AbstractProfiler} definește funcționalitățile suportate de profilator, indiferent de resursa măsurată. Utilizarea ei se justifică deoarece \texttt{Profiler} este un tip de date generic, care nu ar putea fi stocat dinamic sau accesat printr-o referință\footnote{În terminologia Rust, putem spune că \texttt{AbstractProfiler} este un trait \emph{object-safe} deoarece poate fi folosit ca o interfață din limbajele orientate pe obiecte.}. Astfel, structura \texttt{AdaptiveProfiler}, care realizează interfațarea cu Python, nu mai trebuie să rețină informații despre resursa contorizată după crearea obiectului concret de tip \texttt{Profiler}.
+
+În figură nu apar și alte câteva tipuri de date și metode utilitare, cum ar fi \texttt{Stopwatch}, care oferă o interfață de tip cronometru, sau \texttt{FunctionStatistics}, care colectează datele măsurate pentru fiecare funcție.
+
+\section{Contoare de resurse}
+
+\subsection{Surse de ceas}
+
+Pentru măsurarea timpului de execuție, nu putem folosi ceasul care apare în interfața grafică a utilizatorului (\textit{system time}). Acesta poate fluctua dacă îl schimbă utilizatorul sau se mai fac corecții de ceas (de exemplu, prin Network Time Protocol), iar precizia nu este extraordinară. Avem nevoie de un cronometru stabil și monoton, care să poată măsura duratele la nivel de nanosecundă.
+
+Profilatorul apelează funcțiile de măsurare a timpului din biblioteca standard Rust, care se folosesc de ceasul de precizie mare specific fiecărei platforme \cite{std_time_instant_docs}. Sistemul de operare oferă dezvoltatorilor acces la ceasul intern al procesorului, utilizat pentru scheduling sau comunicarea între nuclee (de exemplu, poate folosi High-Precision Event Timers pe sistemele Intel \cite{intel_hpet}).
+
+\subsection{Contoare hardware}
+
+Pentru obținerea informațiilor despre numărul de rateuri de cache sau branch mispredictions, folosesc o bibliotecă existentă care face apeluri la funcțiile de sistem Linux. Acestea generează o înterupere în kernel, care citește contoarele procesorului folosind instrucțiuni privilegiate, iar apoi le întoarce la profilator.
+
+\section{Stiva de apel}
+
+Pentru a cronometra corect intrările și ieșirile din funcții, profilatorul trebuie să urmărească evoluția stivei de apel a programului.
+
+Neavând o modalitate de a salva direct informațiile necesare pe stiva utilizată de profilatorul Python, folosesc un vector de structuri de tipul \texttt{Stopwatch}. La fiecare intrare într-o funcție se reține timpul (sau valoarea resursei măsurate) la momentul respectiv. Când se începe un sub-apel, cronometrul este pus în modul de „pauză”, nu mai incrementează timpul total. La întoarcere, cronometrul este „pornit” din nou și actualizează timpul măsurat pentru funcție.
+
+Când se termină execuția funcției respective, statisticile se salvează într-un vector alocat dinamic cu toți timpii de execuție anteriori (informație necesară la rularea algoritmului de curse) și se eliberează spațiul alocat pe stivă.
+
+\section{Splay tree}
+
+Pe măsură ce se execută programul, profilatorul trebuie să rețină informații despre funcțiile contorizate în structuri de date interne. Concret, avem nevoie de o colecție de tip mulțime (\textit{set}) pentru lista de funcții pe care alegem să nu le mai profilăm, și o colecție asociativă de tip dicționar (\textit{map}) care să întoarcă pentru fiecare funcție vectorul cu statisticile înregistrate anterior.
+
+Pentru ambele nevoi s-ar putea utiliza o structură de date bazată pe tabele de dispersie. Teoretic ele oferă căutare/acces în timp \(\bigO{1}\), aparent optim. Însă profilatorul are un \textit{use case} specific: există câteva elemente (funcții) care vor fi accesate foarte des, și altele care vor fi accesate foarte rar sau chiar de loc după prima indexare (ex.: o funcție care este apelată o singură dată).
+
+Structura de date care se potrivește acestui model de acces este un \textbf{splay tree}, cunoscut și ca \emph{arbore rotativ} \cite{splay_tree}. Aceasta constă într-un arbore binar de căutare, nu neapărat echilibrat, cu proprietatea că \textbf{cele mai recent accesate elemente se pot accesa din nou foarte eficient}. Asta contrabalansează timpul \(\bigO{n}\) pentru găsirea unui nod accesat foarte rar.
+
+% TO DO describe how splay trees work
+
+Am utilizat o bibliotecă open source care implementează splay trees \cite{splay} și exportă tipurile de colecții necesare (\texttt{SplaySet} și \texttt{SplayMap}).
+
+\section{String interning}
+
+Un alt detaliu de implementare care încetinea profilatorul era numărul mare de alocări dinamice de șiruri de caractere. De fiecare dată când se apela sau se întorcea o funcție, profilatorul trebuia să ia numele ei din obiectul primit de la interpretor și să-l transforme într-un \texttt{String} alocat dinamic, pentru a-l putea salva ulterior în structurile de date. 
+
+\textbf{String interning} este o optimizare care constă în păstrarea unei singure instanțe a fiecărui șir de caractere distinct. După „internarea” acestuia, orice utilizare face referire la acesta printr-un ID numeric (numit și \emph{simbol}).
+
+O alegere de design pe care a trebuit să o fac este legată de dimensiunea în biți a identificatorilor. am rulat câteva teste cu diferitele posibile, iar rezultatele în figura \ref{fig:symbol-size}.
+
+% TODO nu arată bine să fie pe o pagină separată
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=0.8\textwidth]{symbol-size}
+    \caption{Timpul de execuție al programului analizat în funcție de dimensiunea identificatorilor numerici}
+    \label{fig:symbol-size}
+\end{figure}
+
+\texttt{U16} este un întreg pe 16 biți fără semn, \texttt{U32} este pe 32 de biți, iar \texttt{Usize} are dimensiunea unui pointer, adică 64 de biți pe calculatorul meu. După cum se poate vedea, diferențele sunt de performanță sunt minore, dar tipul \texttt{U32} are fluctuația cea mai mică. Ne așteptăm să crească eficiența cu identificatori pe mai puțini biți, care ocupă mai puțină memorie, dar e bine să fie suficient de mari cât să nu strice alinierea structurilor în care se află. În final, am decis să utilizez simboluri pe 32 de biți.
+
+Totodată, utilizarea cheilor numerice simplifică comparațiile pe care le făceau arborii de căutare splay, crescând și mai mult eficiența. Câteva teste arată că utilizarea string interning îmbunătățește performanța profilatorului cu până la 20\%, în funcție de specificul programului analizat.
+
+Am utilizat o bibliotecă existentă de Rust care oferă suport pentru string interning \cite{string_interner}.
+
+\section{Interfața din linia de comandă}
+
+Pe lângă importarea și utilizarea directă a modulului de CPython, am pregătit și un mic script \texttt{adaprof.py} care poate fi folosit ca o unealtă din linia de comandă.
+
+Ca argumente, primește calea către programul țintă, numărul de rulări care să se realizeze, și resursa care să fie măsurată (implicit \textit{timpul de execuție}, poate fi comutat la număr de \textit{rateuri de cache} sau numărul de \textit{branch mispredictions}).

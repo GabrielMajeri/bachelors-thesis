@@ -1,0 +1,55 @@
+\chapter{Introducere}
+
+\section{Nevoia de profilare a performanței}
+
+Utilizatorii se așteaptă ca programele pe care le folosesc să îndeplinească o serie de cerințe non-funcționale \cite{software_requirements_book}: să fie rapide, să aibă latență de răspuns scăzută, să consume puțină memorie, să nu irosească bateria, etc. Satisfacerea acestor cerințe, de multe ori contradictorii, este un efort adițional pentru dezvoltatorii software, și un cost financiar și de timp suplimentar pentru companiile care vor să se asigure că nu lansează pe piață un produs de calitate slabă \cite{the_standish_report}.
+
+În același timp, programatorii care se bazează pe „intuiție” pentru a determina părțile de cod care trebuie îmbunătățite ajung să ia deciziile greșite. Acum aproape 50 de ani, Donald E. Knuth spunea că \textit{premature optimization is the root of all evil} \cite{premature_optimization}. Alegerea zonelor de program pe care ar trebui să ne concentrăm eforturile este în continuare o problemă de actualitate.
+
+Un \textbf{profilator software} este o unealtă specializată care analizează programele în timp ce se execută și determină care sunt funcțiile cele mai ineficiente. Dificultatea constă în dezvoltarea unui profilator care să ofere o împărțire cât mai precisă a timpului de execuție pe subprograme, dar păstrând un overhead minim \cite{profiler_inaccuracies}.
+
+\section{Scopul lucrării}
+
+Unealta descrisă în această lucrare își propune să vină în ajutorul dezvoltatorilor software care își doresc să îmbunătățească performanța programelor lor de Python. Fără a fi nevoie de o configurare prealabilă, profilatorul poate înveli o regiune de cod sau un întreg program pentru a identifica cele mai ineficiente subprograme. În comparație cu alte unelte existente, oferă rezultate precise cu un cost adițional de analiză redus.
+
+Codul sursă este disponibil la adresa \href{https://github.com/GabrielMajeri/adaptive-profiler}{https://github.com/GabrielMajeri/adaptive-profiler}.
+
+\section{Obiective}
+
+În implementarea lucrării am avut în vedere următoarele obiective:
+
+\begin{itemize}
+    \item \textbf{Eficiență}: obține profilul de performanță al unui program cu un cost suplimentar de analiză mic\footnote{În comparație cu un profilator de tip tracing, care poate încetini execuția de la 2 până la 10 ori.}.
+    \item \textbf{Simplitate}: poate fi folosit pe orice tip de program fără să necesite o configurare prealabilă\footnote{În comparație cu un profilator statistic, care necesită setarea unei rate de eșantionare corecte, iar alegerea acesteia se face în funcție de specificul programului.}.
+    \item \textbf{Generalitate}: permite alegerea la rulare a indicatorului de performanță măsurat.
+\end{itemize}
+
+\section{Structura lucrării}
+
+Lucrarea se împarte în următoarele capitole:
+
+\begin{enumerate}
+    \item \textbf{Introducere}: oferă o perspectivă de ansamblu asupra lucrării precum și principalele rezultate.
+    \item \textbf{Preliminarii}: descrie resursele care sunt măsurate în procesul de profilare, modurile tradiționale de construcție a unui profilator (statistical și tracing) și formalizarea problemei în modelul banditului multi-armat.
+    \item \textbf{Soluția propusă}: prezintă la nivel înalt modul de funcționare al profilatorului și optimizarea algoritmică care îi oferă avantaje față de soluțiile existente.
+    \item \textbf{Implementare}: detaliază alegerile făcute în implementarea programului și câteva optimizări mai mici adăugate pe parcurs.
+    \item \textbf{Concluzii}: rezumă informațiile prezentate și indică direcția în care se pot face dezvoltări ulterioare.
+\end{enumerate}
+
+\section{Motivația personală}
+
+Am ales această temă deoarece am fost tot timpul fascinat de îmbunătățirea performanțelor programelor și de modul în care compilatoarele ajung să optimizeze codul, înlocuindu-l cu unul mai rapid dar echivalent din punct de vedere funcțional. Cercetarea pe acest subiect mi-a lărgit orizontul despre adâncimea domeniului și m-a ajutat să apreciez complexitatea limbajelor interpretate moderne.
+
+\section{Istoria performanței software}
+
+Reducerea timpului de execuție a fost necesară încă de la apariția primelor mașini de calcul. Dispozitivul „Bombe” a fost proiectat de Alan Turing pentru a decripta comunicațiile germane în Al Doilea Război Mondial. Aceasta se folosea de forța brută pentru a determina care din cele peste \(10^{15}\) chei posibile era folosită la criptarea unui anumit mesaj \cite{enigma_complexity}. Cheile de criptare erau schimbate zilnic; orice algoritm care dura mai mult de 24 de ore nu ar fi fost practic.
+
+Identificând particularitățile sistemului de criptare Engima și optimizându-și mașina de calcul, britanicii au ajuns la punctul în care puteau să spargă cifrul \emph{în câteva zeci de minute} \cite{bombe_running_time}.
+
+În anii '60 au apărut primele uneltele software de analiză a performanței, implementate pentru mașinile de calcul IBM System/360 \cite{ibm_system_360_profiling}. Acestea întrerupeau execuția la intervale regulate pentru a identifica blocurile de cod în care programul petrecea cel mai mult timp.
+
+Profilarea performanței a început să fie realizată pe scară largă din 1974, când unealta \texttt{prof} a fost inclusă în a 5-a versiune a sistemului de operare Unix \cite{unix_manual}. În 1982, cercetătorii de la UC Berkley au publicat \texttt{gprof}, un profilator care înțelegea structura procedurală a unui program (\textit{call-graph profiling}) și identifica lanțurile de apeluri ineficiente \cite{gprof_paper}.
+
+În 2013, Intel a lansat microarhitectura de procesoare Broadwell, care include suport pentru \emph{Processor Tracing} \cite{intel_pt}. Această tehnologie capturează evenimentele din timpul execuției direct în hardware, pe fiecare nucleu de procesare. Datele sunt citite ulterior de un software specializat și decodificate, pentru a înțelege factorii care afectează performanța programului. Dezavantajul acestei metode este că necesită utilizarea anumitor tipuri de procesoare Intel, generează o cantitatea foarte mare de informații (câteva sute de MiB per secundă pentru fiecare nucleu) și aduce un cost suplimentar de analiză la timpul de execuție (unul mult mai mic decât al profilatoarelor implementate în software) \cite{perf_intel_pt_man_page}.
+
+În ultimii ani, accentul cercetării în acest domeniu s-a mutat pe profilarea pe scară largă a sistemelor distribuite \cite{google_wide_profiling}, cum ar fi aplicațiile web construite din sute de micro-servicii \cite{profiling_microservices}. Însă principiile utilizate în proiectarea acestor unelte sunt aceleași indiferent că vorbim de aplicații în cloud sau programe rulate pe un laptop.

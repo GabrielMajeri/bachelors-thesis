@@ -1,0 +1,172 @@
+\chapter{Soluția propusă}
+
+\section{Concept}
+
+Noul tip de profilator introdus este un hibrid între profilatoarele tracing, care analizează fiecare apel sau întoarcere dintr-o funcție, și profilatoarele statistice, care eșantionează execuția programului și observă funcțiile apelate în acele momente.
+
+Ideea fundamentală provine de la o lucrare de cercetare a grupului SAILS de la Stanford \cite{ml_for_systems_profiling}. Pornim cu un mod de funcționare specific unui profilator de tip tracing --- analizăm toate funcțiile, încetinind programul. Pe măsură ce determinăm timpul de execuție real al unor funcții și observăm că nu afectează prea mult rezultatul final, alegem să le ignorăm. Profilatorul analizează un procent din ce în ce mai mic de funcții. Până la final, profilatorul poate ajunge să culeagă mai puține „eșantioane” chiar și decât un profiler statistic.
+
+\subsection*{Măsurarea altor resurse în afară de timpul de execuție}
+
+În paragrafele care urmează voi folosi termenul de \emph{timp de execuție}, dar algoritmul de selecție funcționează identic și dacă alegem să măsurăm \emph{numărul de rateuri de cache} sau \emph{numărul de branch mispredictions}. Singurele condiții impuse acestor resurse sunt:
+
+\label{sec:resource_conditions}
+
+\begin{itemize}
+    \item Să \textbf{crească monoton} pe parcursul execuției programului.
+    \item \textbf{Valorile mai mici} să indice \textbf{o performanță mai bună}\footnote{Nu este o cerință strictă, deoarece putem să negăm valorile dacă resursa respectivă funcționează invers. Important este să fie corelată cu noțiunea intuitivă de \emph{performanță}.}.
+    \item Să \textbf{difere} suficient între subprograme, pentru a permite identificarea ineficienței\footnote{Condiția de diferență \emph{suficientă} este descrisă riguros în următoarea secțiune.}.
+\end{itemize}
+
+\section{Algoritmul de curse}
+
+Metoda prin care putem alege ce funcții să ignorăm este algoritmul de curse (\textit{racing algorithm}) \cite{hoeffding_races}. Acesta a fost creat inițial pentru a rezolva probleme de optimizare și pentru a alege cele mai bune modele în domeniul inteligenței artificiale, bazându-se pe câteva rezultate teoretice din statistică.
+
+Numele algoritmului provine de la cursele de cai unde se aplică regula eliminării: concurentul de pe ultimul loc este scos din cursă, în tura următoare rămânând mai puțini participanți. În cazul nostru, „concurenții” sunt de fapt funcțiile care trebuie profilate, iar ordonarea se face în funcție de valoarea resursei măsurate.
+
+\subsection{Pașii algoritmului}
+
+Algoritmul este rulat de profilatorul de mai multe ori pe parcursul execuției unui program, de fiecare dată când obține destule eșantioane\footnote{Fie când programatorul apelează metoda \texttt{update}, fie la un interval configurabil de timp.}. O rundă se desfășoară în felul următor:
+
+\begin{enumerate}
+    \item Pentru fiecare funcție se calculează intervalul de încredere 95\% al timpului de execuție\footnote{În teste nu a părut să conteze foarte mult valoarea exactă a acestui procent, cât timp se alege unul care să elimine valorile extreme.}.
+    \item Se identifică funcția cu cel mai mic timp mediu de execuție.
+    \item Se compară marginea superioară a timpului ei de execuție cu marginile inferioare ale tuturor celorlalte funcții. Dacă este mai mic, atunci este eliminată din cursă. Acest pas este reprezentat în figura \ref{fig:racing_algorithm_selection}.
+\end{enumerate}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{racing}
+    \caption{Algoritmul de curse elimină la fiecare pas funcția a cărei margine superioară este mai mică decât marginile inferioare ale tuturor celorlalte funcții}
+    \label{fig:racing_algorithm_selection}
+\end{figure}
+
+La început, vor fi eliminate funcțiile cu un timp de execuție mic și destul de stabil (de exemplu, operațiile aritmetice, \textit{getters} și \textit{setters}, etc.). Pe măsură ce rulăm din ce în ce mai mult programul, obținem mai multe eșantioane pentru fiecare funcție și reducem incertitudinea legată de timpul ei real de execuție. Când diferența dintre marginea superioară și marginea inferioară ajunge să fie suficient de mică, profilatorul decide să nu o mai eșantioneze în etapele viitoare.
+
+O posibilă problemă care ar bloca algoritmul și l-ar face să nu mai elimine niciun concurent este dacă am avea două funcții diferite cu un timp de execuție de nedistins. De aceea am specificat și în secțiunea \ref{sec:resource_conditions} că resursele pe care le măsurăm trebuie să separe suficient între ele subprogramele, pentru că algoritmul în forma descrisă nu tratează acest caz special.
+
+În practică, este foarte improbabil ca două funcții diferite să aibă fix același timp de execuție, atâta timp cât nu sunt implementate la fel, nu au aceleași instrucțiuni, și nu sunt apelate cu exact aceiași parametri. O soluție teoretică ar fi să luăm o marjă de eroare când facem sortarea și compararea funcțiilor la pasul 3 din algoritm, și să le considerăm echivalente dacă au aproximativ același timp de execuție.
+
+\subsection{Demonstrația de corectitudine}
+
+\textbf{Inegalitatea lui Hoeffding} este baza teoretică care garantează corectitudinea algoritmului descris mai sus. Aceasta oferă o margine superioară asupra valorii cu care deviază o sumă de variabile aleatoare față de valoarea lor medie \cite{hoeffding_inequality}.
+
+Condițiile impuse asupra acestor variabile aleatoare sunt:
+\begin{itemize}
+    \item Să fie \textbf{independente}. Deoarece comparăm timpul total\footnote{Diferența dintre timpul total și cumulativ este prezentată în secțiunea \ref{sec:total_time} din preliminarii.} de execuție al unei funcții, care depinde doar de instrucțiunile din corpul ei, nu cel cumulativ, care depinde și de subprogramele pe care le apelează, avem garanția că măsurătorile unei funcții nu le afectează pe celelalte.
+    \item Să fie \textbf{mărginite}, o presupunere rezonabilă având în vedere că lucrăm cu programe care se termină într-un timp finit.
+\end{itemize}
+
+Aplicând inegalitatea lui Hoeffding, putem să demonstrăm că după \(n\) runde ale algoritmului descris mai sus probabilitatea ca eroarea pe care o are distribuția profilatorul nostru (\(E_{est}\)) față de distribuția reală a timpilor de execuție (\(E_{true}\)) să fie mai mare de \(\epsilon(n)\) este sub \(1\%\).
+
+Respectând notațiile din \cite{hoeffding_races}, putem exprima afirmația avem ca
+
+\[Pr(\abs{E_{true} - E_{est}} > \epsilon(n)) < 0.01\]
+
+unde
+
+\[\epsilon(n) = \sqrt{\frac{B^2 \log (\frac{2}{\delta})}{2n}}\]
+
+\(\delta\) este procentul intervalului de încredere al eșantioanelor, pe care l-am ales să fie \(95\%\). \(B\) este o constantă care depinde de fiecare program în parte, și este direct proporțională cu timpul maxim de execuție al acestuia.
+
+În inegalitatea de mai sus, \(\epsilon\) scade pe măsură ce crește \(n\), numărul de runde ale algoritmului. Deci profilatorul dezvoltat se apropie din ce în ce mai mult de distribuția reală a timpilor de execuție, și eroarea la fiecare pas este mărginită (proporțional cu o constantă care depinde de natura programului).
+
+\subsection{Exemplu}
+
+Pentru a înțelege mai bine algoritmul de curse, îl vom aplica manual pe un exemplu simplu. Am ales un program de Python care calculează (naiv) produsul a două matrici. În practică s-ar folosi o bibliotecă ca \emph{NumPy} \cite{numpy}, care implementează rutinele de algebră liniară în cod compilat.
+
+\begin{lstlisting}[language=Python]
+def multiply(a, b):
+    "Multiplies two numbers"
+    return a * b
+
+def multiply_matrices(A, B):
+    "Multiplies two matrices"
+    assert len(A[0]) == len(B)
+    n = len(A)
+    m = len(B)
+    p = len(B[0])
+
+    C = [[0 for _ in range(p)] for _ in range(n)]
+
+    for i in range(n):
+        for j in range(p):
+            acc = 0
+            for k in range(m):
+                acc += multiply(A[i][k], B[k][j])
+            C[i][j] = acc
+
+    return C
+\end{lstlisting}
+
+Am rulat funcția de mai sus pe două matrici cu valori aleatoare, de dimensiune 50x30, respectiv 30x40. Figura \ref{fig:matmul_first_round} reprezintă grafic distribuția timpilor de execuție a funcțiilor care sunt apelate în cod.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{matmul-round1}
+    \caption{Timpii de execuție ai funcțiilor (pe o scară logaritmică)}
+    \label{fig:matmul_first_round}
+\end{figure}
+
+Funcția cu cel mai mic timp mediu de execuție este \texttt{multiply}, care calculează produsul dintre două numere reale. Profilatorul o elimină și decide să o ignore în rundele următoare.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.8\textwidth]{matmul-round2}
+    \caption{Timpii de execuție ai funcțiilor în a doua rundă}
+    \label{fig:matmul_second_round}
+\end{figure}
+
+În figura \ref{fig:matmul_second_round} am reprezentat timpii de execuție din următoarea execuție a programului. De observat că acum avem atât eșantioanele care erau reprezentate în graficul precedent, dar și eșantioanele din noua rundă, ceea ce înseamnă că estimările pentru timpii de execuție ale acelor funcții sunt și mai precise.
+
+După ce se rulează din nou algoritmul de curse, alegem să eliminăm funcția internă a interpretorului \texttt{<listcomp>}, care implementează funcționalitatea de \textit{list comprehension} a limbajului Python. Aceasta era folosită în exemplu pentru a aloca dinamic matricea rezultată.
+
+La final, când rămânem cu o singură funcție, este adăugată implicit pe lista de excluziuni. Execuția programului în continuare nu mai poate afecta timpii măsurați pentru funcțiile deja analizate.
+
+\section{Evaluarea soluției}
+
+Principalele trăsături care diferențiază un profilator sunt:
+\begin{itemize}
+    \item \textbf{Eficiența}, care se referă la un cost suplimentar de analiză (\textit{overhead}) redus.
+    \item \textbf{Precizia}, cât de bine reflectă profilul de performanță generată distribuția reală a resurselor.
+\end{itemize}
+
+În această secțiune, voi descrie rezultatele unei comparații între profilatorul dezvoltat în cadrul acestei lucrări, notat cu \texttt{adaptive\_profiler}, profilatorul de tip tracing inclus în biblioteca standard Python, numit \texttt{cProfile} \cite{cprofile_user_manual}, și un profilator statistic implementat tot în limbajul Rust, numit \texttt{py-spy} \cite{py_spy}. Programul țintă este codul naiv de înmulțit matrici, descris anterior.
+
+\subsection{Costul de analiză}
+
+În tabelul din figura \ref{fig:profiler_overhead} am notat cât a durat realizarea a 64 de înmulțiri de matrici, cu și fără profilator. Se poate vedea cum activarea modulului \texttt{cProfile} a dublat timpul de execuție al programului de bază. Soluția propusă a încetinit și ea execuția, dar se poate observa că are un \textit{overhead} cu 22\% mai mic față de \texttt{cProfile}.
+
+Profilatorul \texttt{py-spy} pare să încetinească și el destul de mult execuția programului, deși este un profilator statistic. Însă timpul de execuție din tabel este inexact, deoarece \texttt{py-spy} nu poate fi importat ca un modul și rulat doar pe codul de interes, așa că trebuie să pornească un interpreter de Python și să încarce tot codul dat.
+
+\begin{figure}[h]
+    \centering
+    \begin{tabular}{ |c|c|c| }
+        \cline{2-3}
+        \multicolumn{1}{c|}{} & Timp de execuție (s) & Relativ la baseline \\
+        \hline
+        Programul neprofilat (\textit{baseline}) & 0,816 & 1x \\
+        \hline
+        \texttt{cProfile} & 1,81 & 2,22x \\
+        \hline
+        \texttt{adaptive\_profiler} & 1,453 & 1,78x \\ 
+        \hline
+        \texttt{py-spy} & 1,447 & 1,77x \\
+        \hline
+    \end{tabular}
+    \caption{Timpii de execuție ai programului \texttt{matmul} sub diferite profilatoare}
+    \label{fig:profiler_overhead}
+\end{figure}
+
+\subsection{Precizia}
+
+Am exportat datele culese de fiecare profilator și le-am prezentat grafic în figura \ref{fig:performance_profiles}. Se poate vedea calitativ cum soluția propusă și unealta de referință \texttt{cProfile} au aproximativ aceeași distribuție a timpilor de execuție. În schimb, \texttt{py-spy} a oferit rezultate inexacte: a supraestimat costul funcției \texttt{multiply} (care deși se apelează de multe ori, nu consumă foarte mult timp per apel) și nici nu a produs vreun rezultat pentru \texttt{<listcomp>} (fiind o funcție implicită din Python, e posibil să nu o poată identifica).
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=0.8\textwidth]{profiles}
+    \caption{Profilele de performanță pentru programul \texttt{matmul}}
+    \label{fig:performance_profiles}
+\end{figure}
+
+Pentru a cuantifica distanța între profilele de performanță, am folosit funcția \texttt{entropy} din biblioteca \texttt{scipy} \cite{scipy} pentru a calcula divergența Kullback-Leibler între distribuții. Soluția descrisă în această lucrare diferă de profilatorul standard Python cu o divergență de \(0,002\). Comparativ, \texttt{py-spy} are o divergență față de \texttt{cProfile} de \(1,537\).

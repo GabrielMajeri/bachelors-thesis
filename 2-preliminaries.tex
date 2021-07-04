@@ -1,0 +1,120 @@
+\chapter{Preliminarii}
+
+\section{Calculabilitate și complexitate}
+
+Informatica teoretică clasifică problemele după \emph{calculabilitatea} lor (dacă pot sau nu să fie rezolvate de o mașină de calcul ideală), respectiv după \emph{complexitatea} lor (de câte resurse computaționale avem nevoie pentru a le rezolva) \cite{computability_complexity_book}.
+
+Modelul mașinii Turing ne permite să definim eficiența unui algoritm în funcție de dimensiunea datelor de intrare  \cite{turing_machine}\cite{computational_complexity_paper}. Putem spune că o mașină Turing calculează un rezultat în cel mult \(2 n^3\) pași sau consumând cel mult \(2^{n + 1}\) memorie. Folosind notația asimptotică \(\symcal{O}\), în exemplul anterior am avea o complexitate de timp de \(\bigO{n^3}\), respectiv complexitate de memorie \(\bigO{2^n}\).
+
+Schimbând algoritmul pe care se bazează un program putem determina îmbunătățiri de performanță la nivel asimptotic, de exemplu o trecere de la \(\bigO{n^2}\) la \(\bigO{n \log n}\). Însă când avem deja algoritmul cu cea mai bună complexitate teoretică, nu ne mai rămâne decât să determinăm și să reducem \textbf{constantele} ascunse de notația \(\symcal{O}\).
+
+Aici intervin profilatoarele software, care realizează analiza detaliată de care avem nevoie. Pe lângă datele statistice pe care le culeg din execuție, sunt capabile să înțeleagă structura internă a unui program (împărțirea pe module, subprograme, linii de cod) și să ne indice \emph{care} sunt porțiunile ineficiente și \emph{de ce} afectează performanța întregii aplicații (care este \textit{bottleneck}-ul).
+
+\section{Resurse măsurabile}
+
+În modelul teoretic, discutăm exclusiv despre complexitatea de timp și complexitatea de spațiu a unui algoritm. Mai mult, acestea au unități de măsură abstracte (numărul de pași, numărul de celule de pe bandă) care nu au un echivalent direct în practică.
+
+În această secțiune voi descrie o serie de resurse cuantificabile care sunt utilizați ca indicatori ai performanței unui program real.
+
+\subsection{Timpul de execuție}
+
+\subsubsection{La nivel de program}
+
+În funcție de natura aplicației analizate, ne interesează următoarele măsuri legate de timp:
+
+\begin{itemize}
+    \item \textbf{debit (throughput)}: cantitatea de informații care poate fi procesată într-un interval de timp.
+    \item \textbf{latență}: timpul de răspuns, durata de la recepționarea inputului de către program până la afișarea primului rezultat.
+\end{itemize}
+
+La un sistem de procesare în loturi (\textit{batch processing}) ne interesează mai mult debitul: avem un șir de date de intrare pe care le încărcăm în memorie, dăm drumul programului și ne dorim să le proceseze pe toate cât mai repede. În cazul sistemelor interactive, cum ar fi interfețele grafice sau aplicațiile web, ne interesează mult mai mult latența: utilizatorul vrea să primească un răspuns, chiar și intermediar, cât mai rapid.
+
+Pentru a măsura debitul, este suficient să rulăm profilatorul pe întreaga execuție a unui program. Astfel putem identifica cele mai ineficiente porțiuni de cod și le putem îmbunătăți. Dacă vrem să măsurăm latența, este bine să activăm profilatorul doar pe regiunile de program în care vrem să răspundem rapid la comenzile utilizatorului (de exemplu, îi dăm drumul când se efectuează un click și îl oprim în momentul în care s-a afișat grafic rezultatul).
+
+\subsubsection{La nivel de subprograme}
+\label{sec:total_time}
+
+Putem distinge două moduri diferite de a contoriza timpul de execuție al unei funcții \cite{cprofile_user_manual}:
+\begin{itemize}
+    \item timpul \textbf{total}: cât timp a fost petrecut executând instrucțiunile din corpul acelei funcții, fără a măsura timpul petrecut în sub-apeluri.
+    \item timpul \textbf{cumulativ}: cât timp a fost petrecut executând acea funcție și în toate funcțiile pe care le-a apelat la rândul ei.
+\end{itemize}
+
+Când vrem să determinăm motivele pentru care un program rulează greu, ne uităm după funcția care are cel mai mare timp total. Când plecăm de la o funcție și vrem să ne dăm seama dacă este ineficientă, sau dacă una dintre funcțiile apelate de ea o îngreunează, este mai ușor să ne uităm doar la timpul cumulativ.
+
+Pentru a măsura timpul total, ne imaginăm că la începutul funcției dăm drumul la un cronometru. De fiecare dată când se intră într-un subprogram, îl punem temporar pe pauză. La revenirea din apel, îi dăm drumul din nou. La finalul funcției, citim valoarea cronometrului. Pentru a măsura timpul cumulativ, este suficient să dăm drumul la un cronometru când intrăm în funcție, îl lăsăm să ruleze în fundal indiferent de câte sub-apeluri se efectuează, și îl citim la întoarcerea din funcția măsurată.
+
+\subsection{Măsurarea contoarelor hardware}
+
+Sistemele de calcul moderne au arhitecturi complexe, cu diferite tipuri de instrucțiuni, cache-uri și subsisteme. Timpul de execuție nu reflectă suficient de bine interacțiunea dintre aceste componente, așa că în practică avem nevoie și de alți indicatori, specifici fiecărui tip de procesor. Aceștia sunt numiți \textbf{contoare hardware de performanță} (\textit{hardware performance counters}) \cite{hardware_performance_monitoring}.
+
+\subsubsection*{Rateuri de cache}
+
+Legea lui Moore a prevăzut creșterea exponențială a numărului de tranzistori în circuitele integrate. Asta implică o dublare a performanței procesoarelor la aproximativ fiecare doi ani \cite{moores_law}. Însă factorul limitant pentru majoritatea programelor moderne nu este puterea computațională, ci viteza cu care se poate accesa memoria \cite{what_every_programmer_should_know_about_memory}.
+
+Pentru a reduce impactul acestei probleme, arhitecturile moderne folosesc \emph{cache}-uri, porțiuni de memorie mai rapide dar de dimensiuni reduse, care stochează cele mai accesate date.
+
+În momentul în care un nucleu de procesare are nevoie să citească o variabilă care nu se află în regiștrii, transmite o cerere către memorie. Aceasta trece mai întâi prin \emph{cache controller}, care verifică dacă nu o are deja salvată. Încărcarea valorii ei din cache se numește \emph{cache hit}. Dacă nu a fost găsită, cererea continuă la următorul nivel din ierarhia de cache-uri, până la memoria RAM. Acest caz nefavorabil se numește \emph{cache miss} (rateu de cache).
+
+Un număr mare de rateuri de cache poate indica probleme cu modelul de acces al datelor, cu așezarea și gruparea lor în memorie în sau cu implementarea structurilor de date.
+
+\subsubsection*{Branch mispredictions}
+
+Procesoarele moderne utilizează o optimizare numită \emph{execuție speculativă}, prin care încep să execute instrucțiunile viitoare chiar dacă nu știu cu siguranță care dintre ele vor fi active.
+
+Pentru blocurile liniare de instrucțiuni acest lucru se face destul de ușor (hardware-ul decodifică mai multe instrucțiuni deodată și începe să le evalueze în paralel), dar atunci când apar blocuri condiționale trebuie să ia o decizie legată de ramura care va fi urmată. De asta se ocupă un \emph{branch predictor}, o componentă specializată care încearcă să ghicească care este cea mai probabilă posibilitate.
+
+Cazul nefavorabil este atunci când acest \textit{branch predictor} greșește și se dovedește că trebuia urmată de fapt altă ramură. În acest moment, procesorul trebuie să golească cache-urile de instrucțiuni, să se întoarcă și să reia execuția din punctul de ramificare.
+
+Ne așteptăm să avem un număr mai mare de \textit{branch mispredictions} în codul cu multe ramificări, dar de multe ori putem reorganiza condițiile din \texttt{if}-uri pentru a-l reduce.
+
+\section{Tipuri de profilatoare}
+
+Pentru a înțelege mai bine limitările uneltelor existente, în această secțiune prezint principalele arhitecturi de profilatoare folosite în practică. 
+
+\subsection{Statistice}
+
+\textbf{Profilatoarele statistice} sunt printre cele mai vechi dar și cele mai simple tipuri de profilatoare. Ele opresc execuția programului la intervale regulate și citesc stiva de apel pentru a vedea ce funcții se execută în acel moment. Această operație se numește \emph{eșantionare} (\textit{sampling}), iar frecvența cu care întrerup programul se numește \emph{rată de eșantionare} (\textit{sampling rate}).
+
+Principalul lor dezavantaj este că nu sunt foarte precise. De multe ori pierd din vedere funcțiile care au un timp de execuție foarte mic individual dar care cumulat încetinesc programul, și pot da rezultate complet greșite pentru funcțiile cu varianță foarte mare. O parte din probleme se rezolvă prin creșterea ratei de eșantionare, dar asta mărește și costul de analiză. De asemenea, alegerea unei rate de eșantionare bune poate fi problematică pentru dezvoltatorii neexperimentați.
+
+% statprof https://github.com/bos/statprof.py
+% pyflame https://github.com/uber-archive/pyflame
+% perf https://github.com/torvalds/linux/tree/master/tools/perf - nu merge pentru Python dar a fost o sursă de inspirație pentru HPC
+
+\subsection{Tracing}
+
+\textbf{Profilatoarele tracing} urmăresc îndeaproape execuția programului și înregistrează orice apel și return dintr-o funcție. Pentru a putea face acest lucru, se integrează cu compilatorul sau interpretorul limbajului țintă.
+
+Dezavantajul lor este că au un cost adițional de analiză foarte mare, deși produc rezultate precise.
+
+% cProfile/profile https://docs.python.org/3/library/profile.html
+% FunctionTrace https://hacks.mozilla.org/2020/05/building-functiontrace-a-graphical-python-profiler/
+
+\section{Formalizarea problemei}
+
+Acum că am parcurs principalele noțiuni din domeniul profilării performanței, voi descrie \emph{formalismele matematice} prin care modelăm problema.
+
+\subsection{Distribuția resurselor}
+
+Exceptând cazurile triviale, majoritatea subprogramelor consumă o cantitate variabilă de resurse, care depinde de argumentele cu care au fost apelate și de starea internă a structurilor de date, dar și de unii \textit{factori externi} cum ar fi ocuparea cache-urilor de instrucțiuni/de memorie sau încărcarea (\text{load}-ul) dispozitivului la momentul respectiv. Din această cauză, nu putem vorbi despre \emph{un} timp de execuție sau \emph{un} număr de rateuri de cache al unei funcții, ci despre \textbf{distribuția de probabilitate} a resursei respective.
+
+La fiecare rulare a subprogramului, profilatorul obține un \textbf{eșantion} din această distribuție, inițial necunoscută. Obiectivul nostru este să determinăm o \textbf{aproximare cât mai bună a distribuției} resurselor pe toate funcțiile dintr-un program (acesta este așa-numitul \emph{profil} al performanței).
+
+\subsection{Distanța dintre distribuții}
+
+Din moment ce diferitele profile de performanță ale unui program sunt distribuții, putem vorbi și despre \textbf{distanța} dintre ele. Ne imaginăm că știm care este distribuția reală a timpilor de execuție \(P_{real}\) și vrem să determinăm cât de mult o distribuție obținută experimental \(P_{empiric}\) diferă de ea. În acest sens definim \emph{divergența Kullback-Leibler} (numită și \emph{entropie relativă}) \cite{kullback_leibler_divergence} ca
+
+\[D_{KL} (P_{empiric} || P_{real}) = \sum_{x \in F} P_{empiric} (x) \log \left(\frac{P_{empiric}}{P_{real}}\right) \]
+
+unde \(F\) este mulțimea tuturor funcțiilor apelate de program.
+
+Această măsură ne ajută să cuantificăm noțiunea intuitivă de distribuții diferite. Când avem două profile de performanță care corespund în majoritatea locurilor, avem o entropie relativă mică. Când cele două profile au valori foarte diferite, entropia este mult mai mare.
+
+\subsection{Modelul banditului multi-armat}
+
+Formalismul pe care îl vom alege este acela al unui \textbf{bandit multi-armat} (\textit{multi-armed bandit}) \cite{multi_armed_bandit}. Denumirea vine de la termenul englezesc \textit{bandit}, un joc mecanic întâlnit în cazino. \textit{Multi-armed} indică că avem de a face cu mai multe astfel de aparate.
+
+Problema care se pune este: pornind de la un \textit{multi-armed bandit} cu probabilități și recompense inițial necunoscute, vrem să determinăm distribuția fiecărui \textit{arm} (fiecărui joc) prin cât mai puține încercări (ne imaginăm că fiecare încercare costă bani).
+
+În contextul nostru, mulțimea funcțiilor unui program reprezintă jocurile mecanice ale banditului, iar noi ne dorim să le profilăm (să determinăm distribuțiile timpilor lor de execuție) cu un cost cât mai mic (cât mai puține „încercări”).
